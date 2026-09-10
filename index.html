@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="HR Numbers">
-<title>HR Numbers Final</title>
+<title>HR Numbers Final v2.2</title>
 <style>
 *{box-sizing:border-box}
 :root{--blue:#0f4c81;--blue2:#eaf2f9;--bg:#f3f6fa;--text:#172033;--muted:#6d7788;--line:#e5eaf0;--danger:#b42318;--ok:#067647;--warn:#b54708}
@@ -55,6 +55,7 @@ var base=[]; try{base=JSON.parse(document.getElementById("employeeData").textCon
 var app=document.getElementById("app"), selected=null, currentFilter="الكل";
 var TX_KEY="hrnumbers_transactions_final";
 var EMP_KEY="hrnumbers_employees_final";
+var TS_KEY="hrnumbers_timesheet_final";
 var OLD_TX_KEYS=["hrnumbers_transactions_v14","hrnumbers_transactions_v13"];
 
 function esc(x){return String(x==null?"":x).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
@@ -73,9 +74,25 @@ function init(){
   }
   var emp=storeGet(EMP_KEY,null);
   if(emp===null) storeSet(EMP_KEY,{added:[],overrides:{},deleted:[]});
+  var ts=storeGet(TS_KEY,null);
+  if(ts===null) storeSet(TS_KEY,[]);
 }
 function getTx(){return storeGet(TX_KEY,[])}
 function setTx(x){storeSet(TX_KEY,x)}
+function getTS(){return storeGet(TS_KEY,[])}
+function setTS(x){storeSet(TS_KEY,x)}
+function minutesBetween(a,b){
+  if(!a||!b)return 0;
+  var p1=a.split(":"),p2=b.split(":"),m1=(+p1[0])*60+(+p1[1]),m2=(+p2[0])*60+(+p2[1]);
+  if(m2<m1)m2+=1440;
+  return Math.max(0,m2-m1);
+}
+function totalWorkHours(start,end,breakMin){
+  var mins=minutesBetween(start,end)-(+breakMin||0);
+  if(mins<0)mins=0;
+  var h=Math.floor(mins/60),m=mins%60;
+  return {minutes:mins,text:(h?h+" ساعة ":"")+(m?m+" دقيقة":"")||"0 دقيقة",decimal:(mins/60).toFixed(2)};
+}
 function empState(){return storeGet(EMP_KEY,{added:[],overrides:{},deleted:[]})}
 function setEmpState(x){storeSet(EMP_KEY,x)}
 function allEmployees(){
@@ -104,18 +121,33 @@ function txToCSV(){
   return "\ufeff"+rows.map(function(r){return r.map(csvCell).join(",")}).join("\r\n");
 }
 
+function employeesToCSV(){
+  var rows=[["Employee ID","Full Name","Job Title","Department","Work Place","Work Area","Living Place","Nationality","Company","Residence Expiration","Status"]];
+  allEmployees().forEach(function(e){rows.push([e.id,e.fullName,e.jobTitle,e.department,e.workPlace,e.workArea,e.livingPlace,e.nationality,e.company,e.residenceExpiration,e.status||"Active"])});
+  return "\ufeff"+rows.map(function(r){return r.map(csvCell).join(",")}).join("\r\n");
+}
+function timesheetToCSV(){
+  var rows=[["Date","Employee ID","Employee Name","Clock In","Clock Out","Break Minutes","Total Minutes","Total Hours","Notes"]];
+  getTS().sort(function(a,b){return String(a.date).localeCompare(String(b.date))}).forEach(function(t){
+    rows.push([t.date,t.employeeId,t.employeeName,t.clockIn,t.clockOut,t.breakMinutes,t.totalMinutes,t.totalHours,t.notes]);
+  });
+  return "\ufeff"+rows.map(function(r){return r.map(csvCell).join(",")}).join("\r\n");
+}
+
 function login(){
- app.innerHTML='<div class="container"><div class="card hero"><div class="logo">HR</div><h1 style="margin-top:14px">HR Numbers</h1><div class="muted" style="margin-top:6px">النسخة النهائية المحلية</div><div class="field"><label>رمز الدخول</label><input id="pin" type="password" inputmode="numeric" placeholder="أدخل الرمز"></div><button class="btn primary" id="go">دخول</button><div id="err" class="error"></div><div class="small" style="margin-top:12px">رمز الدخول: 1234</div></div></div>';
+ app.innerHTML='<div class="container"><div class="card hero"><div class="logo">HR</div><h1 style="margin-top:14px">HR Numbers</h1><div class="muted" style="margin-top:6px">النسخة النهائية المحلية v2.2</div><div class="field"><label>رمز الدخول</label><input id="pin" type="password" inputmode="numeric" placeholder="أدخل الرمز"></div><button class="btn primary" id="go">دخول</button><div id="err" class="error"></div><div class="small" style="margin-top:12px">رمز الدخول: 1234</div></div></div>';
  document.getElementById("go").onclick=function(){if(document.getElementById("pin").value==="1234"){sessionStorage.setItem("hr_auth","1");home()}else document.getElementById("err").textContent="رمز الدخول غير صحيح"};
 }
 function home(){
  var employees=allEmployees(),tx=getTx(),active=employees.filter(function(e){return String(e.status||"Active").toLowerCase()!=="inactive"}).length;
  app.innerHTML='<div class="top">HR Numbers</div><div class="container">'+
  '<div class="card"><div class="statrow"><div class="stat"><b>'+employees.length+'</b><span>إجمالي الموظفين</span></div><div class="stat"><b>'+active+'</b><span>نشط</span></div><div class="stat"><b>'+tx.length+'</b><span>معاملة</span></div></div></div>'+
- '<div class="card"><div class="navgrid"><button class="navbtn" id="addEmp">＋ إضافة موظف</button><button class="navbtn" id="tools">⚙️ الأدوات والنسخ الاحتياطي</button></div></div>'+
+ '<div class="card"><div class="navgrid"><button class="navbtn" id="allEmp">👥 جميع الموظفين</button><button class="navbtn" id="timesheet">🕘 Timesheet</button><button class="navbtn" id="addEmp">＋ إضافة موظف</button><button class="navbtn" id="tools">⚙️ الأدوات والنسخ الاحتياطي</button></div></div>'+
  '<div class="card"><div class="field"><label>البحث عن موظف</label><input id="q" placeholder="رقم الموظف أو الاسم"></div><div class="checkrow"><input id="showInactive" type="checkbox"><label for="showInactive" class="small">إظهار الموظفين غير النشطين</label></div><div id="list"></div></div>'+
  '<button class="btn danger" id="logout">تسجيل الخروج</button></div>';
  document.getElementById("logout").onclick=function(){sessionStorage.removeItem("hr_auth");login()};
+ document.getElementById("allEmp").onclick=allEmployeesPage;
+ document.getElementById("timesheet").onclick=timesheetPage;
  document.getElementById("addEmp").onclick=function(){employeeForm(null)};
  document.getElementById("tools").onclick=toolsPage;
  var q=document.getElementById("q"),show=document.getElementById("showInactive"),list=document.getElementById("list");
@@ -184,7 +216,14 @@ function employeeForm(emp){
  document.getElementById("saveEmp").onclick=function(){
    var id=idstr(document.getElementById("id").value),name=document.getElementById("fullName").value.trim();
    if(!id||!name){document.getElementById("msg").innerHTML='<div class="error">رقم الموظف والاسم مطلوبان.</div>';return}
-   if(!editing&&findEmployee(id)){document.getElementById("msg").innerHTML='<div class="error">رقم الموظف مستخدم بالفعل.</div>';return}
+   var normalizedName=name.replace(/\s+/g," ").trim().toLowerCase();
+   var duplicateId=allEmployees().some(function(x){return idstr(x.id)===id && (!editing || idstr(x.id)!==idstr(emp.id))});
+   var duplicateName=allEmployees().some(function(x){
+     var xn=String(x.fullName||"").replace(/\s+/g," ").trim().toLowerCase();
+     return xn===normalizedName && (!editing || idstr(x.id)!==idstr(emp.id));
+   });
+   if(duplicateId){document.getElementById("msg").innerHTML='<div class="error">لا يمكن الحفظ: رقم الموظف مستخدم بالفعل.</div>';return}
+   if(duplicateName){document.getElementById("msg").innerHTML='<div class="error">لا يمكن الحفظ: اسم الموظف موجود بالفعل.</div>';return}
    var e={id:id,fullName:name,jobTitle:v("jobTitle"),department:v("department"),workPlace:v("workPlace"),workArea:v("workArea"),livingPlace:v("livingPlace"),nationality:v("nationality"),company:v("company"),residenceExpiration:v("residenceExpiration"),status:v("status")};
    saveEmployee(e,editing);selected=e;document.getElementById("msg").innerHTML='<div class="success">تم حفظ بيانات الموظف.</div>';setTimeout(profile,450)
  };
@@ -237,19 +276,114 @@ function txForm(type){
 }
 function msg(t,ok){document.getElementById("msg").innerHTML='<div class="'+(ok?'success':'error')+'">'+esc(t)+'</div>'}
 
+
+function uniqueValues(key){
+  var s=new Set();
+  allEmployees().forEach(function(e){var v=String(e[key]||"").trim();if(v)s.add(v)});
+  return Array.from(s).sort(function(a,b){return a.localeCompare(b,"ar")});
+}
+function allEmployeesPage(){
+  var companies=uniqueValues("company"),depts=uniqueValues("department"),nats=uniqueValues("nationality");
+  app.innerHTML='<div class="top">جميع الموظفين</div><div class="container"><button class="back" id="back">رجوع</button>'+
+  '<div class="card"><div class="field"><label>بحث</label><input id="aq" placeholder="الاسم أو رقم الموظف"></div>'+
+  '<div class="grid"><div class="field"><label>الشركة</label><select id="company"><option value="">الكل</option>'+companies.map(function(x){return '<option>'+esc(x)+'</option>'}).join("")+'</select></div>'+
+  '<div class="field"><label>القسم</label><select id="dept"><option value="">الكل</option>'+depts.map(function(x){return '<option>'+esc(x)+'</option>'}).join("")+'</select></div>'+
+  '<div class="field"><label>الجنسية</label><select id="nat"><option value="">الكل</option>'+nats.map(function(x){return '<option>'+esc(x)+'</option>'}).join("")+'</select></div>'+
+  '<div class="field"><label>الحالة</label><select id="statusf"><option value="">الكل</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div></div>'+
+  '<div class="field"><label>الترتيب</label><select id="sort"><option value="id">رقم الموظف</option><option value="name">الاسم</option></select></div>'+
+  '<div id="allCount" class="info"></div><button class="btn secondary" id="exportEmp" style="margin-top:12px">تصدير قائمة الموظفين CSV</button><div id="allList"></div></div></div>';
+  document.getElementById("back").onclick=home;
+  document.getElementById("exportEmp").onclick=function(){download("HR_Employees_"+today()+".csv",employeesToCSV(),"text/csv;charset=utf-8")};
+  ["aq","company","dept","nat","statusf","sort"].forEach(function(id){document.getElementById(id).oninput=draw;document.getElementById(id).onchange=draw});
+  function draw(){
+    var q=v("aq").toLowerCase(),co=v("company"),de=v("dept"),na=v("nat"),st=v("statusf"),sort=v("sort");
+    var arr=allEmployees().filter(function(e){
+      if(q && idstr(e.id).indexOf(q)<0 && String(e.fullName||"").toLowerCase().indexOf(q)<0)return false;
+      if(co && String(e.company||"")!==co)return false;
+      if(de && String(e.department||"")!==de)return false;
+      if(na && String(e.nationality||"")!==na)return false;
+      if(st && String(e.status||"Active")!==st)return false;
+      return true;
+    });
+    arr.sort(function(a,b){
+      if(sort==="name")return String(a.fullName||"").localeCompare(String(b.fullName||""),"ar");
+      var na=Number(a.id),nb=Number(b.id);if(!isNaN(na)&&!isNaN(nb))return na-nb;return idstr(a.id).localeCompare(idstr(b.id));
+    });
+    document.getElementById("allCount").textContent="عدد النتائج: "+arr.length+" من "+allEmployees().length;
+    document.getElementById("allList").innerHTML=arr.length?arr.map(function(e){
+      var off=String(e.status||"Active").toLowerCase()==="inactive";
+      return '<div class="result" data-id="'+esc(e.id)+'"><div><div class="name">'+esc(e.fullName||"بدون اسم")+'</div><div class="small">'+esc(e.jobTitle||"")+(e.department?' • '+esc(e.department):'')+(e.company?' • '+esc(e.company):'')+'</div></div><span class="badge'+(off?' off':'')+'">'+(off?'غير نشط ':'#')+esc(e.id)+'</span></div>';
+    }).join(""):'<div class="empty">لا توجد نتائج</div>';
+    Array.prototype.forEach.call(document.querySelectorAll("#allList .result"),function(el){el.onclick=function(){selected=findEmployee(el.getAttribute("data-id"));profile()}});
+  }
+  draw();
+}
+function timesheetPage(){
+  var employees=allEmployees().filter(function(e){return String(e.status||"Active").toLowerCase()!=="inactive"});
+  app.innerHTML='<div class="top">Timesheet</div><div class="container"><button class="back" id="back">رجوع</button>'+
+  '<div class="card"><h3>تسجيل يوم عمل</h3>'+
+  '<div class="field"><label>الموظف</label><input id="empSearch" placeholder="ابحث بالاسم أو الرقم"><select id="empSelect" size="5" style="margin-top:8px"></select></div>'+
+  '<div class="field"><label>التاريخ</label><input id="tsDate" type="date" value="'+today()+'"></div>'+
+  '<div class="grid"><div class="field"><label>وقت الدخول</label><input id="clockIn" type="time"></div><div class="field"><label>وقت الخروج</label><input id="clockOut" type="time"></div></div>'+
+  '<div class="field"><label>الاستراحة بالدقائق</label><input id="breakMin" type="number" min="0" value="0" inputmode="numeric"></div>'+
+  '<div id="tsCalc" class="calc">إجمالي ساعات العمل: —</div>'+
+  '<div class="field"><label>ملاحظات</label><textarea id="tsNotes" placeholder="ملاحظات اختيارية"></textarea></div>'+
+  '<button class="btn primary" id="saveTS">حفظ التايم شيت</button><div id="tsMsg"></div></div>'+
+  '<div class="card"><div class="toolbar"><button class="btn secondary" id="exportTS">تصدير CSV</button><button class="btn secondary" id="showAllTS">عرض كل السجل</button></div><div id="tsList"></div></div></div>';
+  document.getElementById("back").onclick=home;
+  var search=document.getElementById("empSearch"),sel=document.getElementById("empSelect");
+  function drawEmp(){
+    var q=search.value.trim().toLowerCase();
+    var arr=employees.filter(function(e){return !q||idstr(e.id).indexOf(q)>=0||String(e.fullName||"").toLowerCase().indexOf(q)>=0}).slice(0,80);
+    sel.innerHTML=arr.map(function(e){return '<option value="'+esc(e.id)+'">#'+esc(e.id)+' — '+esc(e.fullName)+'</option>'}).join("");
+    if(arr.length&&!sel.value)sel.value=idstr(arr[0].id);
+  }
+  search.oninput=drawEmp;drawEmp();
+  function calc(){
+    var r=totalWorkHours(v("clockIn"),v("clockOut"),v("breakMin"));
+    document.getElementById("tsCalc").textContent=(v("clockIn")&&v("clockOut"))?("إجمالي ساعات العمل: "+r.text+" ("+r.decimal+" ساعة)"):"إجمالي ساعات العمل: —";
+  }
+  ["clockIn","clockOut","breakMin"].forEach(function(id){document.getElementById(id).oninput=calc;document.getElementById(id).onchange=calc});
+  document.getElementById("saveTS").onclick=function(){
+    var id=sel.value,date=v("tsDate"),cin=v("clockIn"),cout=v("clockOut"),br=+v("breakMin")||0;
+    var emp=findEmployee(id);
+    if(!emp||!date||!cin||!cout){document.getElementById("tsMsg").innerHTML='<div class="error">اختر الموظف والتاريخ ووقت الدخول والخروج.</div>';return}
+    var r=totalWorkHours(cin,cout,br),arr=getTS();
+    var existing=arr.findIndex(function(t){return idstr(t.employeeId)===idstr(id)&&t.date===date});
+    var rec={id:existing>=0?arr[existing].id:"ts_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),date:date,employeeId:emp.id,employeeName:emp.fullName,clockIn:cin,clockOut:cout,breakMinutes:br,totalMinutes:r.minutes,totalHours:r.decimal,notes:v("tsNotes"),createdAt:new Date().toISOString()};
+    if(existing>=0){if(!confirm("يوجد تايم شيت لهذا الموظف في نفس التاريخ. هل تريد استبداله؟"))return;arr[existing]=rec}else arr.push(rec);
+    setTS(arr);document.getElementById("tsMsg").innerHTML='<div class="success">تم حفظ التايم شيت.</div>';drawTSList(false)
+  };
+  document.getElementById("exportTS").onclick=function(){download("HR_Timesheet_"+today()+".csv",timesheetToCSV(),"text/csv;charset=utf-8")};
+  document.getElementById("showAllTS").onclick=function(){drawTSList(true)};
+  function drawTSList(all){
+    var arr=getTS().slice().sort(function(a,b){return String(b.date).localeCompare(String(a.date))});
+    if(!all)arr=arr.slice(0,20);
+    document.getElementById("tsList").innerHTML=arr.length?arr.map(function(t){
+      return '<div class="tx"><div class="tx-head"><div class="tx-type">'+esc(t.employeeName)+' <span class="small">#'+esc(t.employeeId)+'</span></div><div class="tx-date">'+esc(t.date)+'</div></div>'+
+      '<div class="tx-meta">الدخول: '+esc(t.clockIn)+' • الخروج: '+esc(t.clockOut)+'<br>الاستراحة: '+esc(t.breakMinutes)+' دقيقة • الإجمالي: '+esc(t.totalHours)+' ساعة'+(t.notes?'<br>ملاحظات: '+esc(t.notes):'')+'</div>'+
+      '<button class="pill" style="margin-top:10px;color:#b42318" data-tsdel="'+esc(t.id)+'">حذف</button></div>';
+    }).join(""):'<div class="empty">لا توجد سجلات Timesheet بعد</div>';
+    Array.prototype.forEach.call(document.querySelectorAll("[data-tsdel]"),function(b){b.onclick=function(){if(confirm("حذف سجل التايم شيت؟")){setTS(getTS().filter(function(t){return t.id!==b.getAttribute("data-tsdel")}));drawTSList(all)}}});
+  }
+  drawTSList(false);
+}
+
 function toolsPage(){
  app.innerHTML='<div class="top">الأدوات والنسخ الاحتياطي</div><div class="container"><button class="back" id="back">رجوع</button>'+
- '<div class="card"><h3>تصدير المعاملات</h3><div class="small" style="margin-top:6px">ملف CSV يفتح في Excel ويحتوي على جميع المعاملات.</div><button class="btn primary" id="csv" style="margin-top:14px">تصدير المعاملات CSV</button></div>'+
+ '<div class="card"><h3>التصدير</h3><div class="small" style="margin-top:6px">ملفات CSV تفتح في Excel.</div><button class="btn primary" id="csv" style="margin-top:14px">تصدير المعاملات CSV</button><button class="btn secondary" id="empCsv" style="margin-top:10px">تصدير الموظفين CSV</button><button class="btn secondary" id="tsCsv" style="margin-top:10px">تصدير Timesheet CSV</button></div>'+
  '<div class="card"><h3>نسخة احتياطية كاملة</h3><div class="small" style="margin-top:6px">تشمل المعاملات والموظفين المضافين والتعديلات والحذف.</div><button class="btn secondary" id="backup" style="margin-top:14px">تنزيل نسخة احتياطية JSON</button><button class="btn secondary" id="restore" style="margin-top:10px">استعادة نسخة احتياطية</button></div>'+
  '<div class="card"><h3>تنبيه مهم</h3><div class="note">البيانات محفوظة محليًا في Safari على هذا الجهاز. حذف بيانات Safari أو استخدام جهاز آخر لن ينقل البيانات تلقائيًا. استخدم النسخة الاحتياطية دوريًا.</div></div></div>';
  document.getElementById("back").onclick=home;
  document.getElementById("csv").onclick=function(){download("HR_Transactions_"+today()+".csv",txToCSV(),"text/csv;charset=utf-8")};
- document.getElementById("backup").onclick=function(){download("HRNumbers_Backup_"+today()+".json",JSON.stringify({version:"final-1",date:new Date().toISOString(),transactions:getTx(),employees:empState()},null,2),"application/json")};
+ document.getElementById("empCsv").onclick=function(){download("HR_Employees_"+today()+".csv",employeesToCSV(),"text/csv;charset=utf-8")};
+ document.getElementById("tsCsv").onclick=function(){download("HR_Timesheet_"+today()+".csv",timesheetToCSV(),"text/csv;charset=utf-8")};
+ document.getElementById("backup").onclick=function(){download("HRNumbers_Backup_"+today()+".json",JSON.stringify({version:"final-1",date:new Date().toISOString(),transactions:getTx(),employees:empState(),timesheet:getTS()},null,2),"application/json")};
  document.getElementById("restore").onclick=function(){document.getElementById("restoreFile").click()};
 }
 document.getElementById("restoreFile").addEventListener("change",function(ev){
  var file=ev.target.files&&ev.target.files[0];if(!file)return;
- var r=new FileReader();r.onload=function(){try{var d=JSON.parse(r.result);if(!Array.isArray(d.transactions)||!d.employees)throw new Error();if(confirm("سيتم استبدال البيانات المحلية الحالية بالنسخة الاحتياطية. متابعة؟")){setTx(d.transactions);setEmpState(d.employees);alert("تمت الاستعادة بنجاح.");home()}}catch(e){alert("ملف النسخة الاحتياطية غير صالح.")}};r.readAsText(file);ev.target.value=""
+ var r=new FileReader();r.onload=function(){try{var d=JSON.parse(r.result);if(!Array.isArray(d.transactions)||!d.employees)throw new Error();if(confirm("سيتم استبدال البيانات المحلية الحالية بالنسخة الاحتياطية. متابعة؟")){setTx(d.transactions);setEmpState(d.employees);if(Array.isArray(d.timesheet))setTS(d.timesheet);alert("تمت الاستعادة بنجاح.");home()}}catch(e){alert("ملف النسخة الاحتياطية غير صالح.")}};r.readAsText(file);ev.target.value=""
 });
 init();
 if(sessionStorage.getItem("hr_auth")==="1")home();else login();
