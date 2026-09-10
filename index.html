@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="HR Numbers">
-<title>HR Numbers Final v2.3</title>
+<title>HR Numbers Final v2.4</title>
 <style>
 *{box-sizing:border-box}
 :root{--blue:#0f4c81;--blue2:#eaf2f9;--bg:#f3f6fa;--text:#172033;--muted:#6d7788;--line:#e5eaf0;--danger:#b42318;--ok:#067647;--warn:#b54708}
@@ -42,6 +42,11 @@ textarea{min-height:92px;resize:vertical}
 .note{font-size:12px;line-height:1.7;color:var(--muted);background:#f7f9fc;border-radius:12px;padding:11px}
 .hidden{display:none!important}
 @media(max-width:430px){.grid{grid-template-columns:1fr}.statrow{grid-template-columns:1fr 1fr 1fr}}
+@media print{
+  body{background:#fff!important}
+  .no-print{display:none!important}
+  .print-sheet{display:block!important;box-shadow:none!important;margin:0!important;padding:0!important}
+}
 </style>
 </head>
 <body>
@@ -164,18 +169,19 @@ function timesheetToCSV(){
 }
 
 function login(){
- app.innerHTML='<div class="container"><div class="card hero"><div class="logo">HR</div><h1 style="margin-top:14px">HR Numbers</h1><div class="muted" style="margin-top:6px">النسخة النهائية المحلية v2.3</div><div class="field"><label>رمز الدخول</label><input id="pin" type="password" inputmode="numeric" placeholder="أدخل الرمز"></div><button class="btn primary" id="go">دخول</button><div id="err" class="error"></div><div class="small" style="margin-top:12px">رمز الدخول: 1234</div></div></div>';
+ app.innerHTML='<div class="container"><div class="card hero"><div class="logo">HR</div><h1 style="margin-top:14px">HR Numbers</h1><div class="muted" style="margin-top:6px">النسخة النهائية المحلية v2.4</div><div class="field"><label>رمز الدخول</label><input id="pin" type="password" inputmode="numeric" placeholder="أدخل الرمز"></div><button class="btn primary" id="go">دخول</button><div id="err" class="error"></div><div class="small" style="margin-top:12px">رمز الدخول: 1234</div></div></div>';
  document.getElementById("go").onclick=function(){if(document.getElementById("pin").value==="1234"){sessionStorage.setItem("hr_auth","1");home()}else document.getElementById("err").textContent="رمز الدخول غير صحيح"};
 }
 function home(){
  var employees=allEmployees(),tx=getTx(),active=employees.filter(function(e){return String(e.status||"Active").toLowerCase()!=="inactive"}).length;
  app.innerHTML='<div class="top">HR Numbers</div><div class="container">'+
  '<div class="card"><div class="statrow"><div class="stat"><b>'+employees.length+'</b><span>إجمالي الموظفين</span></div><div class="stat"><b>'+active+'</b><span>نشط</span></div><div class="stat"><b>'+tx.length+'</b><span>معاملة</span></div></div></div>'+
- '<div class="card"><div class="navgrid"><button class="navbtn" id="allEmp">👥 جميع الموظفين</button><button class="navbtn" id="timesheet">🕘 Timesheet</button><button class="navbtn" id="holidays">📅 العطلات الرسمية</button><button class="navbtn" id="addEmp">＋ إضافة موظف</button><button class="navbtn" id="tools">⚙️ الأدوات والنسخ الاحتياطي</button></div></div>'+
+ '<div class="card"><div class="navgrid"><button class="navbtn" id="allEmp">👥 جميع الموظفين</button><button class="navbtn" id="transactions">📋 المعاملات</button><button class="navbtn" id="timesheet">🕘 Timesheet</button><button class="navbtn" id="holidays">📅 العطلات الرسمية</button><button class="navbtn" id="addEmp">＋ إضافة موظف</button><button class="navbtn" id="tools">⚙️ الأدوات والنسخ الاحتياطي</button></div></div>'+
  '<div class="card"><div class="field"><label>البحث عن موظف</label><input id="q" placeholder="رقم الموظف أو الاسم"></div><div class="checkrow"><input id="showInactive" type="checkbox"><label for="showInactive" class="small">إظهار الموظفين غير النشطين</label></div><div id="list"></div></div>'+
  '<button class="btn danger" id="logout">تسجيل الخروج</button></div>';
  document.getElementById("logout").onclick=function(){sessionStorage.removeItem("hr_auth");login()};
  document.getElementById("allEmp").onclick=allEmployeesPage;
+ document.getElementById("transactions").onclick=transactionsPage;
  document.getElementById("timesheet").onclick=timesheetPage;
  document.getElementById("holidays").onclick=holidaysPage;
  document.getElementById("addEmp").onclick=function(){employeeForm(null)};
@@ -233,7 +239,8 @@ function drawTx(){
    if(t.notes)meta.push("ملاحظات: "+esc(t.notes));
    return '<div class="tx"><div class="tx-head"><div class="tx-type">'+esc(t.type)+'</div><div class="tx-date">'+esc(t.date||t.fromDate||t.submitDate||"")+'</div></div><div class="tx-meta">'+(meta.length?meta.join("<br>"):"بدون تفاصيل إضافية")+'</div><button class="pill" style="margin-top:10px;color:#b42318" data-del="'+esc(t.id)+'">حذف</button></div>'
  }).join(""):'<div class="empty">لا توجد معاملات مسجلة</div>';
- Array.prototype.forEach.call(box.querySelectorAll("[data-del]"),function(b){b.onclick=function(){if(confirm("حذف هذه المعاملة؟")){setTx(getTx().filter(function(t){return t.id!==b.getAttribute("data-del")}));profile()}}})
+ Array.prototype.forEach.call(box.querySelectorAll("[data-del]"),function(b){b.onclick=function(){if(confirm("حذف هذه المعاملة؟")){setTx(getTx().filter(function(t){return t.id!==b.getAttribute("data-del")}));profile()}}});
+ Array.prototype.forEach.call(box.querySelectorAll("[data-print-inline]"),function(b){b.onclick=function(){printTransaction(b.getAttribute("data-print-inline"))}});
 }
 function employeeForm(emp){
  var editing=!!emp;
@@ -306,6 +313,97 @@ function txForm(type){
 }
 function msg(t,ok){document.getElementById("msg").innerHTML='<div class="'+(ok?'success':'error')+'">'+esc(t)+'</div>'}
 
+
+
+function transactionSummary(t){
+  var parts=[];
+  if(t.fromDate&&t.toDate)parts.push("من "+t.fromDate+" إلى "+t.toDate);
+  if(t.days)parts.push(t.days+" يوم");
+  if(t.date&&!t.fromDate)parts.push("التاريخ "+t.date);
+  if(t.exitTime)parts.push("خروج "+t.exitTime);
+  if(t.returnTime)parts.push("عودة "+t.returnTime);
+  if(t.hours)parts.push("المدة "+t.hours);
+  if(t.duration)parts.push("المدة "+t.duration);
+  if(t.submitDate)parts.push("تقديم "+t.submitDate);
+  if(t.lastWorkDay)parts.push("آخر يوم "+t.lastWorkDay);
+  return parts.join(" • ");
+}
+function transactionsPage(){
+  var types=["الكل","غياب","إذن خروج","إجازة","استقالة"];
+  app.innerHTML='<div class="top">المعاملات</div><div class="container"><button class="back" id="back">رجوع</button>'+
+  '<div class="card"><div class="field"><label>بحث</label><input id="tq" placeholder="اسم الموظف أو رقمه"></div>'+
+  '<div class="grid"><div class="field"><label>نوع المعاملة</label><select id="ttype">'+types.map(function(x){return '<option>'+x+'</option>'}).join("")+'</select></div>'+
+  '<div class="field"><label>التاريخ</label><input id="tdate" type="date"></div></div>'+
+  '<div id="tcount" class="info"></div><div id="transactionsList"></div></div></div>';
+  document.getElementById("back").onclick=home;
+  ["tq","ttype","tdate"].forEach(function(id){document.getElementById(id).oninput=draw;document.getElementById(id).onchange=draw});
+  function draw(){
+    var q=v("tq").toLowerCase(),tp=v("ttype"),dt=v("tdate");
+    var arr=getTx().slice().sort(function(a,b){return String(b.createdAt||b.date||"").localeCompare(String(a.createdAt||a.date||""))}).filter(function(t){
+      if(q && idstr(t.employeeId).indexOf(q)<0 && String(t.employeeName||"").toLowerCase().indexOf(q)<0)return false;
+      if(tp!=="الكل"&&t.type!==tp)return false;
+      var txd=t.date||t.fromDate||t.submitDate||"";
+      if(dt&&txd!==dt)return false;
+      return true;
+    });
+    document.getElementById("tcount").textContent="عدد المعاملات: "+arr.length;
+    document.getElementById("transactionsList").innerHTML=arr.length?arr.map(function(t){
+      return '<div class="tx"><div class="tx-head"><div class="tx-type">'+esc(t.type)+' — '+esc(t.employeeName||"")+' <span class="small">#'+esc(t.employeeId)+'</span></div><div class="tx-date">'+esc(t.date||t.fromDate||t.submitDate||"")+'</div></div>'+
+      '<div class="tx-meta">'+esc(transactionSummary(t))+(t.reason?'<br>السبب: '+esc(t.reason):'')+(t.notes?'<br>ملاحظات: '+esc(t.notes):'')+'</div>'+
+      '<div class="toolbar" style="margin-top:10px"><button class="btn secondary" data-viewtx="'+esc(t.id)+'">عرض</button><button class="btn primary" data-printtx="'+esc(t.id)+'">طباعة</button></div></div>';
+    }).join(""):'<div class="empty">لا توجد معاملات</div>';
+    Array.prototype.forEach.call(document.querySelectorAll("[data-viewtx]"),function(b){b.onclick=function(){transactionDetail(b.getAttribute("data-viewtx"))}});
+    Array.prototype.forEach.call(document.querySelectorAll("[data-printtx]"),function(b){b.onclick=function(){printTransaction(b.getAttribute("data-printtx"))}});
+  }
+  draw();
+}
+function transactionDetail(id){
+  var t=getTx().find(function(x){return x.id===id});if(!t){transactionsPage();return}
+  var emp=findEmployee(t.employeeId)||{};
+  app.innerHTML='<div class="top">تفاصيل المعاملة</div><div class="container"><button class="back" id="back">رجوع</button>'+
+  '<div class="card"><h2>'+esc(t.type)+'</h2><div class="small" style="margin-top:6px">'+esc(t.employeeName||"")+' — #'+esc(t.employeeId)+'</div><div class="grid" style="margin-top:14px">'+
+  item("الوظيفة",emp.jobTitle)+item("القسم",emp.department)+item("الشركة",emp.company)+item("التاريخ",t.date||t.fromDate||t.submitDate)+
+  (t.fromDate?item("من تاريخ",t.fromDate):"")+(t.toDate?item("إلى تاريخ",t.toDate):"")+(t.days?item("عدد الأيام",t.days):"")+
+  (t.exitTime?item("وقت الخروج",t.exitTime):"")+(t.returnTime?item("وقت العودة",t.returnTime):"")+(t.hours?item("المدة",t.hours):"")+
+  (t.duration?item("المدة",t.duration):"")+(t.submitDate?item("تاريخ تقديم الاستقالة",t.submitDate):"")+(t.lastWorkDay?item("آخر يوم عمل",t.lastWorkDay):"")+
+  item("السبب",t.reason)+item("ملاحظات",t.notes)+'</div><button class="btn primary" id="printThis" style="margin-top:14px">طباعة المعاملة</button></div></div>';
+  document.getElementById("back").onclick=transactionsPage;
+  document.getElementById("printThis").onclick=function(){printTransaction(id)};
+}
+function printTransaction(id){
+  var t=getTx().find(function(x){return x.id===id});if(!t)return;
+  var emp=findEmployee(t.employeeId)||{};
+  var title=t.type==="إجازة"?"طلب إجازة":t.type==="إذن خروج"?"إذن خروج":t.type==="استقالة"?"طلب استقالة":t.type==="غياب"?"نموذج غياب":t.type;
+  var rows="";
+  function row(k,val){if(val===undefined||val===null||val==="")return "";return '<tr><th>'+esc(k)+'</th><td>'+esc(val)+'</td></tr>'}
+  rows+=row("رقم الموظف",t.employeeId);
+  rows+=row("اسم الموظف",t.employeeName);
+  rows+=row("الوظيفة",emp.jobTitle);
+  rows+=row("القسم",emp.department);
+  rows+=row("مكان العمل",emp.workPlace);
+  rows+=row("الشركة",emp.company);
+  rows+=row("التاريخ",t.date||t.fromDate||t.submitDate);
+  rows+=row("من تاريخ",t.fromDate);
+  rows+=row("إلى تاريخ",t.toDate);
+  rows+=row("عدد الأيام",t.days);
+  rows+=row("وقت الخروج",t.exitTime);
+  rows+=row("وقت العودة",t.returnTime);
+  rows+=row("المدة / الساعات",t.hours||t.duration);
+  rows+=row("تاريخ تقديم الاستقالة",t.submitDate);
+  rows+=row("آخر يوم عمل",t.lastWorkDay);
+  rows+=row("السبب / التفاصيل",t.reason);
+  rows+=row("ملاحظات",t.notes);
+  var w=window.open("","_blank");
+  if(!w){alert("اسمح للنوافذ المنبثقة للطباعة من إعدادات Safari.");return}
+  w.document.open();
+  w.document.write('<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(title)+'</title><style>'+
+  'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:#111;margin:0;padding:28px;background:white}.sheet{max-width:800px;margin:auto}.head{text-align:center;border-bottom:2px solid #111;padding-bottom:14px;margin-bottom:24px}.head h1{margin:0 0 8px;font-size:26px}.sub{font-size:13px;color:#555}.meta{display:flex;justify-content:space-between;gap:15px;margin-bottom:18px;font-size:13px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #777;padding:10px;text-align:right;vertical-align:top}th{width:32%;background:#f3f3f3}.signatures{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:70px;text-align:center}.sig{padding-top:12px;border-top:1px solid #222}.actions{text-align:center;margin:25px 0}.btn{font:inherit;padding:10px 18px;border:0;border-radius:8px;background:#0f4c81;color:white}@media print{.actions{display:none}body{padding:0}.sheet{max-width:none}.head{margin-top:10px}}</style></head><body>'+
+  '<div class="sheet"><div class="actions"><button class="btn" onclick="window.print()">طباعة</button></div><div class="head"><h1>'+esc(title)+'</h1><div class="sub">HR Numbers</div></div>'+
+  '<div class="meta"><div>رقم المعاملة: '+esc(t.id)+'</div><div>تاريخ الطباعة: '+esc(today())+'</div></div><table>'+rows+'</table>'+
+  '<div class="signatures"><div class="sig">توقيع الموظف</div><div class="sig">المشرف / المدير</div><div class="sig">الموارد البشرية</div></div></div></body></html>');
+  w.document.close();
+  setTimeout(function(){w.focus()},250);
+}
 
 function uniqueValues(key){
   var s=new Set();
