@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="HR Numbers">
-<title>HR Numbers Final v2.2</title>
+<title>HR Numbers Final v2.3</title>
 <style>
 *{box-sizing:border-box}
 :root{--blue:#0f4c81;--blue2:#eaf2f9;--bg:#f3f6fa;--text:#172033;--muted:#6d7788;--line:#e5eaf0;--danger:#b42318;--ok:#067647;--warn:#b54708}
@@ -56,6 +56,7 @@ var app=document.getElementById("app"), selected=null, currentFilter="الكل";
 var TX_KEY="hrnumbers_transactions_final";
 var EMP_KEY="hrnumbers_employees_final";
 var TS_KEY="hrnumbers_timesheet_final";
+var HOL_KEY="hrnumbers_holidays_final";
 var OLD_TX_KEYS=["hrnumbers_transactions_v14","hrnumbers_transactions_v13"];
 
 function esc(x){return String(x==null?"":x).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
@@ -76,11 +77,39 @@ function init(){
   if(emp===null) storeSet(EMP_KEY,{added:[],overrides:{},deleted:[]});
   var ts=storeGet(TS_KEY,null);
   if(ts===null) storeSet(TS_KEY,[]);
+  var hol=storeGet(HOL_KEY,null);
+  if(hol===null) storeSet(HOL_KEY,[]);
 }
 function getTx(){return storeGet(TX_KEY,[])}
 function setTx(x){storeSet(TX_KEY,x)}
 function getTS(){return storeGet(TS_KEY,[])}
 function setTS(x){storeSet(TS_KEY,x)}
+function getHolidays(){return storeGet(HOL_KEY,[])}
+function setHolidays(x){storeSet(HOL_KEY,x)}
+function isWeekend(date){
+  var d=new Date(date+"T00:00:00").getDay();
+  return d===5||d===6;
+}
+function isOfficialHoliday(date){
+  return getHolidays().some(function(h){return h.date===date});
+}
+function dateInRange(date,from,to){
+  return !!date&&!!from&&!!to&&date>=from&&date<=to;
+}
+function employeeDayStatus(emp,date){
+  if(isWeekend(date))return {status:"عطلة أسبوعية",source:"weekend"};
+  if(isOfficialHoliday(date))return {status:"عطلة رسمية",source:"holiday"};
+  var tx=employeeTx(emp.id);
+  var vacation=tx.find(function(t){return t.type==="إجازة"&&dateInRange(date,t.fromDate,t.toDate)});
+  if(vacation)return {status:"إجازة",source:"transaction"};
+  var absent=tx.find(function(t){return t.type==="غياب"&&t.date===date});
+  if(absent)return {status:"غياب",source:"transaction"};
+  var resign=tx.find(function(t){return t.type==="استقالة"&&t.lastWorkDay&&date>t.lastWorkDay});
+  if(resign)return {status:"بعد الاستقالة",source:"transaction"};
+  var perm=tx.find(function(t){return t.type==="إذن خروج"&&t.date===date});
+  if(perm)return {status:"حاضر - إذن خروج",source:"transaction"};
+  return {status:"حاضر",source:"default"};
+}
 function minutesBetween(a,b){
   if(!a||!b)return 0;
   var p1=a.split(":"),p2=b.split(":"),m1=(+p1[0])*60+(+p1[1]),m2=(+p2[0])*60+(+p2[1]);
@@ -127,27 +156,28 @@ function employeesToCSV(){
   return "\ufeff"+rows.map(function(r){return r.map(csvCell).join(",")}).join("\r\n");
 }
 function timesheetToCSV(){
-  var rows=[["Date","Employee ID","Employee Name","Clock In","Clock Out","Break Minutes","Total Minutes","Total Hours","Notes"]];
+  var rows=[["Date","Employee ID","Employee Name","Status","Required Hours","Scheduled Start","Scheduled End","Clock In","Clock Out","Break Minutes","Total Minutes","Total Hours","Notes"]];
   getTS().sort(function(a,b){return String(a.date).localeCompare(String(b.date))}).forEach(function(t){
-    rows.push([t.date,t.employeeId,t.employeeName,t.clockIn,t.clockOut,t.breakMinutes,t.totalMinutes,t.totalHours,t.notes]);
+    rows.push([t.date,t.employeeId,t.employeeName,t.status,t.requiredHours,t.scheduledStart,t.scheduledEnd,t.clockIn,t.clockOut,t.breakMinutes,t.totalMinutes,t.totalHours,t.notes]);
   });
   return "\ufeff"+rows.map(function(r){return r.map(csvCell).join(",")}).join("\r\n");
 }
 
 function login(){
- app.innerHTML='<div class="container"><div class="card hero"><div class="logo">HR</div><h1 style="margin-top:14px">HR Numbers</h1><div class="muted" style="margin-top:6px">النسخة النهائية المحلية v2.2</div><div class="field"><label>رمز الدخول</label><input id="pin" type="password" inputmode="numeric" placeholder="أدخل الرمز"></div><button class="btn primary" id="go">دخول</button><div id="err" class="error"></div><div class="small" style="margin-top:12px">رمز الدخول: 1234</div></div></div>';
+ app.innerHTML='<div class="container"><div class="card hero"><div class="logo">HR</div><h1 style="margin-top:14px">HR Numbers</h1><div class="muted" style="margin-top:6px">النسخة النهائية المحلية v2.3</div><div class="field"><label>رمز الدخول</label><input id="pin" type="password" inputmode="numeric" placeholder="أدخل الرمز"></div><button class="btn primary" id="go">دخول</button><div id="err" class="error"></div><div class="small" style="margin-top:12px">رمز الدخول: 1234</div></div></div>';
  document.getElementById("go").onclick=function(){if(document.getElementById("pin").value==="1234"){sessionStorage.setItem("hr_auth","1");home()}else document.getElementById("err").textContent="رمز الدخول غير صحيح"};
 }
 function home(){
  var employees=allEmployees(),tx=getTx(),active=employees.filter(function(e){return String(e.status||"Active").toLowerCase()!=="inactive"}).length;
  app.innerHTML='<div class="top">HR Numbers</div><div class="container">'+
  '<div class="card"><div class="statrow"><div class="stat"><b>'+employees.length+'</b><span>إجمالي الموظفين</span></div><div class="stat"><b>'+active+'</b><span>نشط</span></div><div class="stat"><b>'+tx.length+'</b><span>معاملة</span></div></div></div>'+
- '<div class="card"><div class="navgrid"><button class="navbtn" id="allEmp">👥 جميع الموظفين</button><button class="navbtn" id="timesheet">🕘 Timesheet</button><button class="navbtn" id="addEmp">＋ إضافة موظف</button><button class="navbtn" id="tools">⚙️ الأدوات والنسخ الاحتياطي</button></div></div>'+
+ '<div class="card"><div class="navgrid"><button class="navbtn" id="allEmp">👥 جميع الموظفين</button><button class="navbtn" id="timesheet">🕘 Timesheet</button><button class="navbtn" id="holidays">📅 العطلات الرسمية</button><button class="navbtn" id="addEmp">＋ إضافة موظف</button><button class="navbtn" id="tools">⚙️ الأدوات والنسخ الاحتياطي</button></div></div>'+
  '<div class="card"><div class="field"><label>البحث عن موظف</label><input id="q" placeholder="رقم الموظف أو الاسم"></div><div class="checkrow"><input id="showInactive" type="checkbox"><label for="showInactive" class="small">إظهار الموظفين غير النشطين</label></div><div id="list"></div></div>'+
  '<button class="btn danger" id="logout">تسجيل الخروج</button></div>';
  document.getElementById("logout").onclick=function(){sessionStorage.removeItem("hr_auth");login()};
  document.getElementById("allEmp").onclick=allEmployeesPage;
  document.getElementById("timesheet").onclick=timesheetPage;
+ document.getElementById("holidays").onclick=holidaysPage;
  document.getElementById("addEmp").onclick=function(){employeeForm(null)};
  document.getElementById("tools").onclick=toolsPage;
  var q=document.getElementById("q"),show=document.getElementById("showInactive"),list=document.getElementById("list");
@@ -172,7 +202,7 @@ function profile(){
  var inactive=String(selected.status||"Active").toLowerCase()==="inactive";
  app.innerHTML='<div class="top">ملف الموظف</div><div class="container"><button class="back" id="back">رجوع</button>'+
  '<div class="card"><div class="toolbar"><button class="btn secondary" id="edit">تعديل البيانات</button><button class="btn '+(inactive?'secondary':'warning')+'" id="toggle">'+(inactive?'إعادة تفعيل':'تعطيل الموظف')+'</button></div><div class="sep"></div><h2>'+esc(selected.fullName||"")+'</h2><div style="margin-top:8px"><span class="badge'+(inactive?' off':'')+'">#'+esc(selected.id)+(inactive?' • غير نشط':'')+'</span></div><div class="grid" style="margin-top:14px">'+
- item("الوظيفة",selected.jobTitle)+item("القسم",selected.department)+item("مكان العمل",selected.workPlace)+item("منطقة العمل",selected.workArea)+item("مكان السكن",selected.livingPlace)+item("الجنسية",selected.nationality)+item("الشركة",selected.company)+item("انتهاء الإقامة",selected.residenceExpiration)+item("الحالة",selected.status||"Active")+'</div></div>'+
+ item("الوظيفة",selected.jobTitle)+item("القسم",selected.department)+item("مكان العمل",selected.workPlace)+item("منطقة العمل",selected.workArea)+item("مكان السكن",selected.livingPlace)+item("الجنسية",selected.nationality)+item("الشركة",selected.company)+item("انتهاء الإقامة",selected.residenceExpiration)+item("ساعات العمل المطلوبة",selected.workHours||8)+item("الحالة",selected.status||"Active")+'</div></div>'+
  '<div class="card"><h3>تسجيل معاملة</h3><div class="actions" style="margin-top:12px"><button class="action" data-type="غياب">غياب</button><button class="action" data-type="إذن خروج">إذن خروج</button><button class="action" data-type="إجازة">إجازة</button><button class="action" data-type="استقالة">استقالة</button></div></div>'+
  '<div class="card"><h3>سجل المعاملات</h3><div class="pills">'+['الكل','غياب','إذن خروج','إجازة','استقالة'].map(function(x){return '<button class="pill'+(x===currentFilter?' active':'')+'" data-filter="'+x+'">'+x+'</button>'}).join("")+'</div><div id="txlist"></div></div>'+
  '<div class="card"><button class="btn danger" id="deleteEmp">حذف الموظف نهائيًا</button><div class="note" style="margin-top:10px">الحذف النهائي يخفي الموظف من التطبيق. معاملات الموظف لا تُحذف تلقائيًا حتى لا نفقد السجل.</div></div></div>';
@@ -208,7 +238,7 @@ function drawTx(){
 function employeeForm(emp){
  var editing=!!emp;
  app.innerHTML='<div class="top">'+(editing?'تعديل موظف':'إضافة موظف')+'</div><div class="container"><button class="back" id="cancel">رجوع</button><div class="card">'+
- field("رقم الموظف","id",emp&&emp.id,"text",editing)+field("الاسم الكامل","fullName",emp&&emp.fullName)+field("الوظيفة","jobTitle",emp&&emp.jobTitle)+field("القسم","department",emp&&emp.department)+field("مكان العمل","workPlace",emp&&emp.workPlace)+field("منطقة العمل","workArea",emp&&emp.workArea)+field("مكان السكن","livingPlace",emp&&emp.livingPlace)+field("الجنسية","nationality",emp&&emp.nationality)+field("الشركة","company",emp&&emp.company)+field("انتهاء الإقامة","residenceExpiration",emp&&emp.residenceExpiration,"text")+
+ field("رقم الموظف","id",emp&&emp.id,"text",editing)+field("الاسم الكامل","fullName",emp&&emp.fullName)+field("الوظيفة","jobTitle",emp&&emp.jobTitle)+field("القسم","department",emp&&emp.department)+field("مكان العمل","workPlace",emp&&emp.workPlace)+field("منطقة العمل","workArea",emp&&emp.workArea)+field("مكان السكن","livingPlace",emp&&emp.livingPlace)+field("الجنسية","nationality",emp&&emp.nationality)+field("الشركة","company",emp&&emp.company)+field("انتهاء الإقامة","residenceExpiration",emp&&emp.residenceExpiration,"text")+field("عدد ساعات العمل المطلوبة","workHours",(emp&&emp.workHours)||8,"number")+
  '<div class="field"><label>الحالة</label><select id="status"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>'+
  '<button class="btn primary" id="saveEmp">'+(editing?'حفظ التعديلات':'إضافة الموظف')+'</button><div id="msg"></div></div></div>';
  document.getElementById("cancel").onclick=function(){editing?profile():home()};
@@ -224,7 +254,7 @@ function employeeForm(emp){
    });
    if(duplicateId){document.getElementById("msg").innerHTML='<div class="error">لا يمكن الحفظ: رقم الموظف مستخدم بالفعل.</div>';return}
    if(duplicateName){document.getElementById("msg").innerHTML='<div class="error">لا يمكن الحفظ: اسم الموظف موجود بالفعل.</div>';return}
-   var e={id:id,fullName:name,jobTitle:v("jobTitle"),department:v("department"),workPlace:v("workPlace"),workArea:v("workArea"),livingPlace:v("livingPlace"),nationality:v("nationality"),company:v("company"),residenceExpiration:v("residenceExpiration"),status:v("status")};
+   var e={id:id,fullName:name,jobTitle:v("jobTitle"),department:v("department"),workPlace:v("workPlace"),workArea:v("workArea"),livingPlace:v("livingPlace"),nationality:v("nationality"),company:v("company"),residenceExpiration:v("residenceExpiration"),workHours:(+v("workHours")||8),status:v("status")};
    saveEmployee(e,editing);selected=e;document.getElementById("msg").innerHTML='<div class="success">تم حفظ بيانات الموظف.</div>';setTimeout(profile,450)
  };
 }
@@ -318,57 +348,110 @@ function allEmployeesPage(){
   }
   draw();
 }
+
 function timesheetPage(){
-  var employees=allEmployees().filter(function(e){return String(e.status||"Active").toLowerCase()!=="inactive"});
-  app.innerHTML='<div class="top">Timesheet</div><div class="container"><button class="back" id="back">رجوع</button>'+
-  '<div class="card"><h3>تسجيل يوم عمل</h3>'+
-  '<div class="field"><label>الموظف</label><input id="empSearch" placeholder="ابحث بالاسم أو الرقم"><select id="empSelect" size="5" style="margin-top:8px"></select></div>'+
-  '<div class="field"><label>التاريخ</label><input id="tsDate" type="date" value="'+today()+'"></div>'+
-  '<div class="grid"><div class="field"><label>وقت الدخول</label><input id="clockIn" type="time"></div><div class="field"><label>وقت الخروج</label><input id="clockOut" type="time"></div></div>'+
-  '<div class="field"><label>الاستراحة بالدقائق</label><input id="breakMin" type="number" min="0" value="0" inputmode="numeric"></div>'+
-  '<div id="tsCalc" class="calc">إجمالي ساعات العمل: —</div>'+
-  '<div class="field"><label>ملاحظات</label><textarea id="tsNotes" placeholder="ملاحظات اختيارية"></textarea></div>'+
-  '<button class="btn primary" id="saveTS">حفظ التايم شيت</button><div id="tsMsg"></div></div>'+
+  app.innerHTML='<div class="top">Timesheet الذكي</div><div class="container"><button class="back" id="back">رجوع</button>'+
+  '<div class="card"><h3>تحضير يوم كامل</h3><div class="small" style="margin-top:6px">كل الموظفين النشطين يعتبرون حاضرين تلقائيًا، إلا إذا لديهم غياب أو إجازة أو استقالة، أو كان اليوم عطلة.</div>'+
+  '<div class="field"><label>التاريخ</label><input id="bulkDate" type="date" value="'+today()+'"></div>'+
+  '<div id="dayInfo" class="info"></div><button class="btn primary" id="prepareDay" style="margin-top:12px">تحضير جميع الموظفين لهذا اليوم</button></div>'+
   '<div class="card"><div class="toolbar"><button class="btn secondary" id="exportTS">تصدير CSV</button><button class="btn secondary" id="showAllTS">عرض كل السجل</button></div><div id="tsList"></div></div></div>';
   document.getElementById("back").onclick=home;
-  var search=document.getElementById("empSearch"),sel=document.getElementById("empSelect");
-  function drawEmp(){
-    var q=search.value.trim().toLowerCase();
-    var arr=employees.filter(function(e){return !q||idstr(e.id).indexOf(q)>=0||String(e.fullName||"").toLowerCase().indexOf(q)>=0}).slice(0,80);
-    sel.innerHTML=arr.map(function(e){return '<option value="'+esc(e.id)+'">#'+esc(e.id)+' — '+esc(e.fullName)+'</option>'}).join("");
-    if(arr.length&&!sel.value)sel.value=idstr(arr[0].id);
+  var dateInput=document.getElementById("bulkDate");
+  function updateDayInfo(){
+    var d=dateInput.value;
+    if(!d){document.getElementById("dayInfo").textContent="اختر التاريخ";return}
+    if(isWeekend(d))document.getElementById("dayInfo").textContent="هذا اليوم عطلة أسبوعية (الجمعة/السبت).";
+    else if(isOfficialHoliday(d)){
+      var h=getHolidays().find(function(x){return x.date===d});
+      document.getElementById("dayInfo").textContent="عطلة رسمية"+(h&&h.name?": "+h.name:"");
+    }else document.getElementById("dayInfo").textContent="يوم عمل: الدوام الأساسي 06:00 إلى 14:00.";
   }
-  search.oninput=drawEmp;drawEmp();
+  dateInput.onchange=updateDayInfo;updateDayInfo();
+
+  document.getElementById("prepareDay").onclick=function(){
+    var date=dateInput.value;if(!date)return;
+    var active=allEmployees().filter(function(e){return String(e.status||"Active").toLowerCase()!=="inactive"});
+    var arr=getTS(),created=0,updated=0;
+    active.forEach(function(emp){
+      var ds=employeeDayStatus(emp,date),hrs=+(emp.workHours||8);
+      var idx=arr.findIndex(function(t){return idstr(t.employeeId)===idstr(emp.id)&&t.date===date});
+      var rec={
+        id:idx>=0?arr[idx].id:"ts_"+Date.now()+"_"+Math.random().toString(36).slice(2,8),
+        date:date,employeeId:emp.id,employeeName:emp.fullName,status:ds.status,
+        requiredHours:hrs,scheduledStart:"06:00",scheduledEnd:"14:00",
+        clockIn:ds.status.indexOf("حاضر")===0?"06:00":"",
+        clockOut:ds.status.indexOf("حاضر")===0?"14:00":"",
+        breakMinutes:0,
+        totalMinutes:ds.status.indexOf("حاضر")===0?480:0,
+        totalHours:ds.status.indexOf("حاضر")===0?"8.00":"0.00",
+        notes:ds.source==="default"?"حضور تلقائي":"تم تحديد الحالة تلقائيًا من النظام",
+        createdAt:new Date().toISOString()
+      };
+      if(idx>=0){arr[idx]=Object.assign({},arr[idx],rec);updated++}else{arr.push(rec);created++}
+    });
+    setTS(arr);
+    alert("تم تحضير اليوم. جديد: "+created+" | تم تحديثه: "+updated);
+    drawTSList(false,date);
+  };
+
+  document.getElementById("exportTS").onclick=function(){download("HR_Timesheet_"+today()+".csv",timesheetToCSV(),"text/csv;charset=utf-8")};
+  document.getElementById("showAllTS").onclick=function(){drawTSList(true,"")};
+
+  function drawTSList(all,onlyDate){
+    var arr=getTS().slice().sort(function(a,b){return String(b.date).localeCompare(String(a.date))||String(a.employeeName).localeCompare(String(b.employeeName),"ar")});
+    if(onlyDate)arr=arr.filter(function(t){return t.date===onlyDate});
+    if(!all&&!onlyDate)arr=arr.slice(0,40);
+    document.getElementById("tsList").innerHTML=arr.length?arr.map(function(t){
+      var status=t.status||"حاضر";
+      return '<div class="tx"><div class="tx-head"><div class="tx-type">'+esc(t.employeeName)+' <span class="small">#'+esc(t.employeeId)+'</span></div><div class="tx-date">'+esc(t.date)+'</div></div>'+
+      '<div class="tx-meta">الحالة: <b>'+esc(status)+'</b><br>الساعات المطلوبة: '+esc(t.requiredHours||8)+' ساعة'+
+      (status.indexOf("حاضر")===0?'<br>الدخول: '+esc(t.clockIn||"06:00")+' • الخروج: '+esc(t.clockOut||"14:00")+' • الإجمالي: '+esc(t.totalHours||"8.00")+' ساعة':'')+
+      (t.notes?'<br>ملاحظات: '+esc(t.notes):'')+'</div>'+
+      '<button class="pill" style="margin-top:10px" data-edit-ts="'+esc(t.id)+'">تعديل</button> <button class="pill" style="margin-top:10px;color:#b42318" data-tsdel="'+esc(t.id)+'">حذف</button></div>';
+    }).join(""):'<div class="empty">لا توجد سجلات Timesheet بعد</div>';
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-tsdel]"),function(b){b.onclick=function(){if(confirm("حذف سجل التايم شيت؟")){setTS(getTS().filter(function(t){return t.id!==b.getAttribute("data-tsdel")}));drawTSList(all,onlyDate)}}});
+    Array.prototype.forEach.call(document.querySelectorAll("[data-edit-ts]"),function(b){b.onclick=function(){editTSRecord(b.getAttribute("data-edit-ts"))}});
+  }
+  drawTSList(false,"");
+}
+function editTSRecord(id){
+  var arr=getTS(),rec=arr.find(function(t){return t.id===id});if(!rec){timesheetPage();return}
+  app.innerHTML='<div class="top">تعديل Timesheet</div><div class="container"><button class="back" id="back">رجوع</button><div class="card">'+
+  '<h3>'+esc(rec.employeeName)+' <span class="small">#'+esc(rec.employeeId)+'</span></h3>'+
+  '<div class="field"><label>الحالة</label><select id="tsStatus"><option>حاضر</option><option>حاضر - إذن خروج</option><option>غياب</option><option>إجازة</option><option>عطلة أسبوعية</option><option>عطلة رسمية</option><option>بعد الاستقالة</option></select></div>'+
+  '<div class="grid"><div class="field"><label>وقت الدخول</label><input id="clockIn" type="time" value="'+esc(rec.clockIn||"")+'"></div><div class="field"><label>وقت الخروج</label><input id="clockOut" type="time" value="'+esc(rec.clockOut||"")+'"></div></div>'+
+  '<div class="field"><label>الاستراحة بالدقائق</label><input id="breakMin" type="number" min="0" value="'+esc(rec.breakMinutes||0)+'"></div>'+
+  '<div id="calcBox" class="calc"></div><div class="field"><label>ملاحظات</label><textarea id="notes">'+esc(rec.notes||"")+'</textarea></div>'+
+  '<button class="btn primary" id="save">حفظ التعديل</button></div></div>';
+  document.getElementById("back").onclick=timesheetPage;
+  document.getElementById("tsStatus").value=rec.status||"حاضر";
   function calc(){
     var r=totalWorkHours(v("clockIn"),v("clockOut"),v("breakMin"));
-    document.getElementById("tsCalc").textContent=(v("clockIn")&&v("clockOut"))?("إجمالي ساعات العمل: "+r.text+" ("+r.decimal+" ساعة)"):"إجمالي ساعات العمل: —";
+    var req=+(rec.requiredHours||8),diff=(+r.decimal-req).toFixed(2);
+    document.getElementById("calcBox").textContent="العمل الفعلي: "+r.decimal+" ساعة | المطلوب: "+req+" | الفرق: "+diff+" ساعة";
   }
-  ["clockIn","clockOut","breakMin"].forEach(function(id){document.getElementById(id).oninput=calc;document.getElementById(id).onchange=calc});
-  document.getElementById("saveTS").onclick=function(){
-    var id=sel.value,date=v("tsDate"),cin=v("clockIn"),cout=v("clockOut"),br=+v("breakMin")||0;
-    var emp=findEmployee(id);
-    if(!emp||!date||!cin||!cout){document.getElementById("tsMsg").innerHTML='<div class="error">اختر الموظف والتاريخ ووقت الدخول والخروج.</div>';return}
-    var r=totalWorkHours(cin,cout,br),arr=getTS();
-    var existing=arr.findIndex(function(t){return idstr(t.employeeId)===idstr(id)&&t.date===date});
-    var rec={id:existing>=0?arr[existing].id:"ts_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),date:date,employeeId:emp.id,employeeName:emp.fullName,clockIn:cin,clockOut:cout,breakMinutes:br,totalMinutes:r.minutes,totalHours:r.decimal,notes:v("tsNotes"),createdAt:new Date().toISOString()};
-    if(existing>=0){if(!confirm("يوجد تايم شيت لهذا الموظف في نفس التاريخ. هل تريد استبداله؟"))return;arr[existing]=rec}else arr.push(rec);
-    setTS(arr);document.getElementById("tsMsg").innerHTML='<div class="success">تم حفظ التايم شيت.</div>';drawTSList(false)
+  ["clockIn","clockOut","breakMin"].forEach(function(x){document.getElementById(x).oninput=calc;document.getElementById(x).onchange=calc});calc();
+  document.getElementById("save").onclick=function(){
+    var status=v("tsStatus"),cin=v("clockIn"),cout=v("clockOut"),br=+v("breakMin")||0,r=totalWorkHours(cin,cout,br);
+    rec.status=status;rec.clockIn=cin;rec.clockOut=cout;rec.breakMinutes=br;rec.totalMinutes=r.minutes;rec.totalHours=r.decimal;rec.notes=v("notes");
+    setTS(arr);timesheetPage();
   };
-  document.getElementById("exportTS").onclick=function(){download("HR_Timesheet_"+today()+".csv",timesheetToCSV(),"text/csv;charset=utf-8")};
-  document.getElementById("showAllTS").onclick=function(){drawTSList(true)};
-  function drawTSList(all){
-    var arr=getTS().slice().sort(function(a,b){return String(b.date).localeCompare(String(a.date))});
-    if(!all)arr=arr.slice(0,20);
-    document.getElementById("tsList").innerHTML=arr.length?arr.map(function(t){
-      return '<div class="tx"><div class="tx-head"><div class="tx-type">'+esc(t.employeeName)+' <span class="small">#'+esc(t.employeeId)+'</span></div><div class="tx-date">'+esc(t.date)+'</div></div>'+
-      '<div class="tx-meta">الدخول: '+esc(t.clockIn)+' • الخروج: '+esc(t.clockOut)+'<br>الاستراحة: '+esc(t.breakMinutes)+' دقيقة • الإجمالي: '+esc(t.totalHours)+' ساعة'+(t.notes?'<br>ملاحظات: '+esc(t.notes):'')+'</div>'+
-      '<button class="pill" style="margin-top:10px;color:#b42318" data-tsdel="'+esc(t.id)+'">حذف</button></div>';
-    }).join(""):'<div class="empty">لا توجد سجلات Timesheet بعد</div>';
-    Array.prototype.forEach.call(document.querySelectorAll("[data-tsdel]"),function(b){b.onclick=function(){if(confirm("حذف سجل التايم شيت؟")){setTS(getTS().filter(function(t){return t.id!==b.getAttribute("data-tsdel")}));drawTSList(all)}}});
-  }
-  drawTSList(false);
 }
-
+function holidaysPage(){
+  app.innerHTML='<div class="top">العطلات الرسمية</div><div class="container"><button class="back" id="back">رجوع</button><div class="card"><h3>إضافة عطلة رسمية</h3>'+
+  '<div class="field"><label>التاريخ</label><input id="hdate" type="date"></div><div class="field"><label>اسم العطلة</label><input id="hname" placeholder="مثال: عطلة رسمية"></div>'+
+  '<button class="btn primary" id="addH">إضافة العطلة</button><div id="hmsg"></div></div><div class="card"><h3>العطلات المسجلة</h3><div id="hlist"></div></div></div>';
+  document.getElementById("back").onclick=home;
+  document.getElementById("addH").onclick=function(){
+    var d=v("hdate"),n=v("hname")||"عطلة رسمية";if(!d){document.getElementById("hmsg").innerHTML='<div class="error">اختر التاريخ.</div>';return}
+    var a=getHolidays();if(a.some(function(x){return x.date===d})){document.getElementById("hmsg").innerHTML='<div class="error">هذا التاريخ مسجل بالفعل كعطلة.</div>';return}
+    a.push({date:d,name:n});setHolidays(a);holidaysPage();
+  };
+  var a=getHolidays().slice().sort(function(x,y){return y.date.localeCompare(x.date)});
+  document.getElementById("hlist").innerHTML=a.length?a.map(function(h){return '<div class="result"><div><div class="name">'+esc(h.name)+'</div><div class="small">'+esc(h.date)+'</div></div><button class="pill" data-hdel="'+esc(h.date)+'" style="color:#b42318">حذف</button></div>'}).join(""):'<div class="empty">لا توجد عطلات رسمية مسجلة</div>';
+  Array.prototype.forEach.call(document.querySelectorAll("[data-hdel]"),function(b){b.onclick=function(){setHolidays(getHolidays().filter(function(h){return h.date!==b.getAttribute("data-hdel")}));holidaysPage()}});
+}
 function toolsPage(){
  app.innerHTML='<div class="top">الأدوات والنسخ الاحتياطي</div><div class="container"><button class="back" id="back">رجوع</button>'+
  '<div class="card"><h3>التصدير</h3><div class="small" style="margin-top:6px">ملفات CSV تفتح في Excel.</div><button class="btn primary" id="csv" style="margin-top:14px">تصدير المعاملات CSV</button><button class="btn secondary" id="empCsv" style="margin-top:10px">تصدير الموظفين CSV</button><button class="btn secondary" id="tsCsv" style="margin-top:10px">تصدير Timesheet CSV</button></div>'+
@@ -378,12 +461,12 @@ function toolsPage(){
  document.getElementById("csv").onclick=function(){download("HR_Transactions_"+today()+".csv",txToCSV(),"text/csv;charset=utf-8")};
  document.getElementById("empCsv").onclick=function(){download("HR_Employees_"+today()+".csv",employeesToCSV(),"text/csv;charset=utf-8")};
  document.getElementById("tsCsv").onclick=function(){download("HR_Timesheet_"+today()+".csv",timesheetToCSV(),"text/csv;charset=utf-8")};
- document.getElementById("backup").onclick=function(){download("HRNumbers_Backup_"+today()+".json",JSON.stringify({version:"final-1",date:new Date().toISOString(),transactions:getTx(),employees:empState(),timesheet:getTS()},null,2),"application/json")};
+ document.getElementById("backup").onclick=function(){download("HRNumbers_Backup_"+today()+".json",JSON.stringify({version:"final-1",date:new Date().toISOString(),transactions:getTx(),employees:empState(),timesheet:getTS(),holidays:getHolidays()},null,2),"application/json")};
  document.getElementById("restore").onclick=function(){document.getElementById("restoreFile").click()};
 }
 document.getElementById("restoreFile").addEventListener("change",function(ev){
  var file=ev.target.files&&ev.target.files[0];if(!file)return;
- var r=new FileReader();r.onload=function(){try{var d=JSON.parse(r.result);if(!Array.isArray(d.transactions)||!d.employees)throw new Error();if(confirm("سيتم استبدال البيانات المحلية الحالية بالنسخة الاحتياطية. متابعة؟")){setTx(d.transactions);setEmpState(d.employees);if(Array.isArray(d.timesheet))setTS(d.timesheet);alert("تمت الاستعادة بنجاح.");home()}}catch(e){alert("ملف النسخة الاحتياطية غير صالح.")}};r.readAsText(file);ev.target.value=""
+ var r=new FileReader();r.onload=function(){try{var d=JSON.parse(r.result);if(!Array.isArray(d.transactions)||!d.employees)throw new Error();if(confirm("سيتم استبدال البيانات المحلية الحالية بالنسخة الاحتياطية. متابعة؟")){setTx(d.transactions);setEmpState(d.employees);if(Array.isArray(d.timesheet))setTS(d.timesheet);if(Array.isArray(d.holidays))setHolidays(d.holidays);alert("تمت الاستعادة بنجاح.");home()}}catch(e){alert("ملف النسخة الاحتياطية غير صالح.")}};r.readAsText(file);ev.target.value=""
 });
 init();
 if(sessionStorage.getItem("hr_auth")==="1")home();else login();
