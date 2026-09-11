@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="HR Numbers">
-<title>HR Numbers Final v2.4.2</title>
+<title>HR Numbers Final v2.5</title>
 <style>
 *{box-sizing:border-box}
 :root{--blue:#0f4c81;--blue2:#eaf2f9;--bg:#f3f6fa;--text:#172033;--muted:#6d7788;--line:#e5eaf0;--danger:#b42318;--ok:#067647;--warn:#b54708}
@@ -47,6 +47,35 @@ textarea{min-height:92px;resize:vertical}
   .no-print{display:none!important}
   .print-sheet{display:block!important;box-shadow:none!important;margin:0!important;padding:0!important}
 }
+
+/* Monthly Timesheet v2.5 */
+.month-ts-wrap{overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid #d7dde5;border-radius:14px;background:#fff}
+.month-ts{border-collapse:separate;border-spacing:0;min-width:max-content;width:max-content;font-size:12px}
+.month-ts th,.month-ts td{border-right:1px solid #e1e5ea;border-bottom:1px solid #e1e5ea;text-align:center;height:38px;padding:0 6px;white-space:nowrap}
+.month-ts thead th{position:sticky;top:0;z-index:8;background:#174f7d;color:#fff;font-weight:700}
+.month-ts .sticky-id{position:sticky;right:0;z-index:9;background:#fff;min-width:78px}
+.month-ts .sticky-name{position:sticky;right:78px;z-index:9;background:#fff;min-width:170px;text-align:right;padding-right:10px}
+.month-ts .sticky-hours{position:sticky;right:248px;z-index:9;background:#fff;min-width:74px}
+.month-ts thead .sticky-id,.month-ts thead .sticky-name,.month-ts thead .sticky-hours{background:#174f7d;color:#fff;z-index:12}
+.month-ts td.present{color:#000;font-weight:800}
+.month-ts td.absent{color:#d00000;font-weight:900;background:#fff4f4}
+.month-ts td.off{font-weight:800;color:#256b2e;background:linear-gradient(135deg,#eef9eb,#bfe4b8)}
+.month-ts td.holiday{font-weight:800;color:#2c6e35;background:linear-gradient(135deg,#eef8ef,#cae8c7)}
+.month-ts .circle{display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;border:2px solid currentColor;border-radius:50%;font-weight:800;line-height:1}
+.month-ts .vac{color:#8a6400}
+.month-ts .exit{color:#205d8a}
+.month-ts .other{color:#6b4b8a}
+.month-ts .summary{background:#f6f8fb;font-weight:800;min-width:68px}
+.month-ts .dayhead{min-width:42px;line-height:1.15;padding:4px 2px}
+.month-ts .fri,.month-ts .sat{background:#dff1da!important;color:#2d6330!important}
+.ts-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ts-controls .field{margin:0}
+@media(max-width:600px){
+  .month-ts .sticky-name{min-width:145px}
+  .month-ts .sticky-hours{right:223px}
+  .ts-controls{grid-template-columns:1fr}
+}
+
 </style>
 </head>
 <body>
@@ -169,7 +198,7 @@ function timesheetToCSV(){
 }
 
 function login(){
- app.innerHTML='<div class="container"><div class="card hero"><div class="logo">HR</div><h1 style="margin-top:14px">HR Numbers</h1><div class="muted" style="margin-top:6px">النسخة النهائية المحلية v2.4.2</div><div class="field"><label>رمز الدخول</label><input id="pin" type="password" inputmode="numeric" placeholder="أدخل الرمز"></div><button class="btn primary" id="go">دخول</button><div id="err" class="error"></div><div class="small" style="margin-top:12px">رمز الدخول: 1234</div></div></div>';
+ app.innerHTML='<div class="container"><div class="card hero"><div class="logo">HR</div><h1 style="margin-top:14px">HR Numbers</h1><div class="muted" style="margin-top:6px">النسخة النهائية المحلية v2.5</div><div class="field"><label>رمز الدخول</label><input id="pin" type="password" inputmode="numeric" placeholder="أدخل الرمز"></div><button class="btn primary" id="go">دخول</button><div id="err" class="error"></div><div class="small" style="margin-top:12px">رمز الدخول: 1234</div></div></div>';
  document.getElementById("go").onclick=function(){if(document.getElementById("pin").value==="1234"){sessionStorage.setItem("hr_auth","1");home()}else document.getElementById("err").textContent="رمز الدخول غير صحيح"};
 }
 function home(){
@@ -182,7 +211,7 @@ function home(){
  document.getElementById("logout").onclick=function(){sessionStorage.removeItem("hr_auth");login()};
  document.getElementById("allEmp").onclick=allEmployeesPage;
  document.getElementById("transactions").onclick=transactionsPage;
- document.getElementById("timesheet").onclick=timesheetPage;
+ document.getElementById("timesheet").onclick=monthlyTimesheetPage;
  document.getElementById("holidays").onclick=holidaysPage;
  document.getElementById("addEmp").onclick=function(){employeeForm(null)};
  document.getElementById("tools").onclick=toolsPage;
@@ -439,8 +468,112 @@ function allEmployeesPage(){
   draw();
 }
 
+
+function pad2(n){return String(n).padStart(2,"0")}
+function ymDate(y,m,d){return y+"-"+pad2(m)+"-"+pad2(d)}
+function daysInMonth(y,m){return new Date(y,m,0).getDate()}
+function arabicWeekShort(y,m,d){
+  var x=new Date(y,m-1,d).getDay();
+  return ["ح","ن","ث","ر","خ","ج","س"][x];
+}
+function monthNameAr(m){
+  return ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"][m-1];
+}
+function txForEmployeeDate(emp,date){
+  var tx=employeeTx(emp.id);
+  var vac=tx.find(function(t){return t.type==="إجازة"&&dateInRange(date,t.fromDate,t.toDate)});
+  if(vac)return {kind:"V",label:"إجازة"};
+  var abs=tx.find(function(t){return t.type==="غياب"&&t.date===date});
+  if(abs)return {kind:"A",label:"غياب"};
+  var ex=tx.find(function(t){return t.type==="إذن خروج"&&t.date===date});
+  if(ex)return {kind:"E",label:"إذن خروج"};
+  var res=tx.find(function(t){return t.type==="استقالة"&&t.lastWorkDay&&date>t.lastWorkDay});
+  if(res)return {kind:"R",label:"بعد الاستقالة"};
+  return null;
+}
+function monthlyCell(emp,y,m,d){
+  var date=ymDate(y,m,d);
+  var dow=new Date(y,m-1,d).getDay();
+  if(dow===5||dow===6)return {kind:"Off",text:"Off",title:"عطلة أسبوعية"};
+  var h=getHolidays().find(function(x){return x.date===date});
+  if(h)return {kind:"Holiday",text:"H",title:h.name||"عطلة رسمية"};
+  var t=txForEmployeeDate(emp,date);
+  if(t)return {kind:t.kind,text:t.kind,title:t.label};
+  var wh=+(emp.workHours||8);
+  return {kind:"Present",text:String(wh),title:"حاضر"};
+}
+function monthlyTimesheetPage(){
+  var now=new Date(), y=now.getFullYear(), m=now.getMonth()+1;
+  app.innerHTML='<div class="top">Timesheet الشهري</div><div class="container">'+
+  '<button class="back" id="back">رجوع</button>'+
+  '<div class="card"><div class="ts-controls">'+
+  '<div class="field"><label>الشهر</label><select id="tsMonth">'+Array.from({length:12},function(_,i){return '<option value="'+(i+1)+'" '+((i+1)===m?'selected':'')+'>'+monthNameAr(i+1)+'</option>'}).join("")+'</select></div>'+
+  '<div class="field"><label>السنة</label><input id="tsYear" type="number" min="2020" max="2100" value="'+y+'"></div>'+
+  '</div>'+
+  '<div class="field"><label>بحث عن موظف</label><input id="tsSearch" placeholder="رقم الموظف أو الاسم"></div>'+
+  '<div class="toolbar"><button class="btn secondary" id="goOldTS">السجل اليومي القديم</button><button class="btn secondary" id="exportMonth">تصدير CSV</button></div>'+
+  '<div class="small" style="margin:8px 0">الرقم = حاضر حسب ساعات الموظف • A = غياب • Off = الجمعة/السبت • V/E وباقي الرموز داخل دائرة.</div>'+
+  '<div id="monthlyBox"></div></div></div>';
+  document.getElementById("back").onclick=home;
+  document.getElementById("goOldTS").onclick=timesheetPage;
+  ["tsMonth","tsYear","tsSearch"].forEach(function(id){document.getElementById(id).oninput=render;document.getElementById(id).onchange=render});
+  document.getElementById("exportMonth").onclick=function(){
+    var yy=+v("tsYear"),mm=+v("tsMonth");
+    download("HR_Monthly_Timesheet_"+yy+"_"+pad2(mm)+".csv",monthlyTimesheetCSV(yy,mm),"text/csv;charset=utf-8");
+  };
+  function render(){
+    var yy=+v("tsYear"),mm=+v("tsMonth"),q=v("tsSearch").trim().toLowerCase();
+    if(!yy||!mm)return;
+    var emps=allEmployees().filter(function(e){return String(e.status||"Active").toLowerCase()!=="inactive"});
+    if(q)emps=emps.filter(function(e){return idstr(e.id).toLowerCase().indexOf(q)>=0||String(e.fullName||"").toLowerCase().indexOf(q)>=0});
+    var n=daysInMonth(yy,mm), h='<div class="month-ts-wrap"><table class="month-ts"><thead><tr>'+
+      '<th class="sticky-id">الرقم</th><th class="sticky-name">اسم الموظف</th><th class="sticky-hours">الساعات</th>';
+    for(var d=1;d<=n;d++){
+      var dow=new Date(yy,mm-1,d).getDay(), cls=(dow===5?"fri":dow===6?"sat":"");
+      h+='<th class="dayhead '+cls+'">'+d+'<br>'+arabicWeekShort(yy,mm,d)+'</th>';
+    }
+    h+='<th class="summary">الحضور</th><th class="summary">غياب</th><th class="summary">إجازة</th><th class="summary">إذن</th><th class="summary">Off</th></tr></thead><tbody>';
+    emps.forEach(function(emp){
+      var present=0,abs=0,vac=0,ex=0,off=0;
+      h+='<tr><td class="sticky-id">'+esc(emp.id)+'</td><td class="sticky-name">'+esc(emp.fullName||"")+'</td><td class="sticky-hours">'+esc(emp.workHours||8)+'</td>';
+      for(var d=1;d<=n;d++){
+        var c=monthlyCell(emp,yy,mm,d), cls="", content=esc(c.text);
+        if(c.kind==="Present"){cls="present";present++}
+        else if(c.kind==="A"){cls="absent";abs++}
+        else if(c.kind==="Off"){cls="off";off++}
+        else if(c.kind==="Holiday"){cls="holiday";content='<span class="circle other">H</span>'}
+        else if(c.kind==="V"){cls="vac";vac++;content='<span class="circle vac">V</span>'}
+        else if(c.kind==="E"){cls="exit";ex++;content='<span class="circle exit">E</span>'}
+        else {cls="other";content='<span class="circle other">'+esc(c.text)+'</span>'}
+        h+='<td class="'+cls+'" title="'+esc(c.title)+'">'+content+'</td>';
+      }
+      h+='<td class="summary">'+present+'</td><td class="summary">'+abs+'</td><td class="summary">'+vac+'</td><td class="summary">'+ex+'</td><td class="summary">'+off+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+    document.getElementById("monthlyBox").innerHTML=h;
+  }
+  render();
+}
+function monthlyTimesheetCSV(y,m){
+  var n=daysInMonth(y,m), rows=[["Employee ID","Employee Name","Working Hours"].concat(Array.from({length:n},function(_,i){return String(i+1)})).concat(["Attendance Days","Absent","Vacation","Exit Permission","Off"])];
+  allEmployees().filter(function(e){return String(e.status||"Active").toLowerCase()!=="inactive"}).forEach(function(emp){
+    var r=[emp.id,emp.fullName,emp.workHours||8],present=0,abs=0,vac=0,ex=0,off=0;
+    for(var d=1;d<=n;d++){
+      var c=monthlyCell(emp,y,m,d), val=c.text;
+      if(c.kind==="Present")present++;
+      else if(c.kind==="A")abs++;
+      else if(c.kind==="V")vac++;
+      else if(c.kind==="E")ex++;
+      else if(c.kind==="Off")off++;
+      r.push(val);
+    }
+    r.push(present,abs,vac,ex,off); rows.push(r);
+  });
+  return "\ufeff"+rows.map(function(r){return r.map(csvCell).join(",")}).join("\r\n");
+}
+
 function timesheetPage(){
-  app.innerHTML='<div class="top">Timesheet الذكي</div><div class="container"><button class="back" id="back">رجوع</button>'+
+  app.innerHTML='<div class="top">Timesheet اليومي</div><div class="container"><button class="back" id="back">رجوع</button>'+
   '<div class="card"><h3>تحضير يوم كامل</h3><div class="small" style="margin-top:6px">كل الموظفين النشطين يعتبرون حاضرين تلقائيًا، إلا إذا لديهم غياب أو إجازة أو استقالة، أو كان اليوم عطلة.</div>'+
   '<div class="field"><label>التاريخ</label><input id="bulkDate" type="date" value="'+today()+'"></div>'+
   '<div id="dayInfo" class="info"></div><button class="btn primary" id="prepareDay" style="margin-top:12px">تحضير جميع الموظفين لهذا اليوم</button></div>'+
