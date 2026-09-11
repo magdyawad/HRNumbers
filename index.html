@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="HR Numbers">
-<title>HR Numbers Final v2.4.1</title>
+<title>HR Numbers Final v2.4.2</title>
 <style>
 *{box-sizing:border-box}
 :root{--blue:#0f4c81;--blue2:#eaf2f9;--bg:#f3f6fa;--text:#172033;--muted:#6d7788;--line:#e5eaf0;--danger:#b42318;--ok:#067647;--warn:#b54708}
@@ -169,7 +169,7 @@ function timesheetToCSV(){
 }
 
 function login(){
- app.innerHTML='<div class="container"><div class="card hero"><div class="logo">HR</div><h1 style="margin-top:14px">HR Numbers</h1><div class="muted" style="margin-top:6px">النسخة النهائية المحلية v2.4.1</div><div class="field"><label>رمز الدخول</label><input id="pin" type="password" inputmode="numeric" placeholder="أدخل الرمز"></div><button class="btn primary" id="go">دخول</button><div id="err" class="error"></div><div class="small" style="margin-top:12px">رمز الدخول: 1234</div></div></div>';
+ app.innerHTML='<div class="container"><div class="card hero"><div class="logo">HR</div><h1 style="margin-top:14px">HR Numbers</h1><div class="muted" style="margin-top:6px">النسخة النهائية المحلية v2.4.2</div><div class="field"><label>رمز الدخول</label><input id="pin" type="password" inputmode="numeric" placeholder="أدخل الرمز"></div><button class="btn primary" id="go">دخول</button><div id="err" class="error"></div><div class="small" style="margin-top:12px">رمز الدخول: 1234</div></div></div>';
  document.getElementById("go").onclick=function(){if(document.getElementById("pin").value==="1234"){sessionStorage.setItem("hr_auth","1");home()}else document.getElementById("err").textContent="رمز الدخول غير صحيح"};
 }
 function home(){
@@ -390,9 +390,9 @@ function printTransaction(id){
   app.innerHTML='<div class="top no-print">'+esc(title)+'</div><div class="container">'+
   '<div class="toolbar no-print"><button class="btn secondary" id="returnApp">← العودة للبرنامج</button><button class="btn primary" id="doPrint">طباعة</button></div>'+
   '<div class="card print-sheet"><div style="text-align:center;border-bottom:2px solid #111;padding-bottom:14px;margin-bottom:24px"><h1>'+esc(title)+'</h1><div class="small">HR Numbers</div></div>'+
-  '<div style="display:flex;justify-content:space-between;gap:15px;margin-bottom:18px;font-size:13px"><div>رقم المعاملة: '+esc(t.id)+'</div><div>تاريخ الطباعة: '+esc(today())+'</div></div>'+
+  '<div style="text-align:left;margin-bottom:18px;font-size:13px"><div>تاريخ الطباعة: '+esc(today())+'</div></div>'+
   '<table style="width:100%;border-collapse:collapse">'+rows.replace(/<th>/g,'<th style="border:1px solid #777;padding:10px;text-align:right;width:32%;background:#f3f3f3">').replace(/<td>/g,'<td style="border:1px solid #777;padding:10px;text-align:right">')+'</table>'+
-  '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:70px;text-align:center"><div style="padding-top:12px;border-top:1px solid #222">توقيع الموظف</div><div style="padding-top:12px;border-top:1px solid #222">المشرف / المدير</div><div style="padding-top:12px;border-top:1px solid #222">الموارد البشرية</div></div></div></div>';
+  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:70px;text-align:center"><div style="padding-top:12px;border-top:1px solid #222">توقيع الموظف</div><div style="padding-top:12px;border-top:1px solid #222">المشرف / المدير</div></div></div></div>';
 
   document.getElementById("returnApp").onclick=function(){app.innerHTML=previousHTML;transactionsPage()};
   document.getElementById("doPrint").onclick=function(){window.print()};
